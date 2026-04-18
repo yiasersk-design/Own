@@ -6,7 +6,98 @@
     <title>Meta AI Note Maker</title>
     
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-     <script>
+     <script> // ==========================================
+// NEW: AUTO CONFIGURATION IMPORT SYSTEM
+// ==========================================
+
+window.triggerApiImport = function() {
+    document.getElementById('importApiConfigInput').click();
+};
+
+window.handleApiImport = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const jsonConfig = JSON.parse(e.target.result);
+            
+            // Validate JSON structure: Accept direct array or an object with 'apis' array
+            let apisToImport =[];
+            if (Array.isArray(jsonConfig)) {
+                apisToImport = jsonConfig;
+            } else if (jsonConfig.apis && Array.isArray(jsonConfig.apis)) {
+                apisToImport = jsonConfig.apis;
+            } else {
+                throw new Error("Invalid JSON structure. Expected a simple array of API objects.");
+            }
+
+            const data = getProfileData();
+            let importedCount = 0;
+
+            // Loop through the simplified API list
+            apisToImport.forEach(item => {
+                const apiName = item.name || "Unnamed API";
+                const apiKey = item.apiKey || "";
+                const apiModel = item.model || "";
+                const apiEndpoint = item.endpoint || "";
+
+                if (apiKey) {
+                    // Check if model already exists to prevent duplicate exact matches
+                    const exists = data.apis.some(api => api.version === apiModel && api.key === apiKey);
+                    
+                    if (!exists) {
+                        data.apis.push({
+                            name: apiName,
+                            key: apiKey,
+                            version: apiModel,
+                            endpoint: apiEndpoint,
+                            isActive: data.apis.length === 0 && importedCount === 0 // Make the first imported one active if list is empty
+                        });
+                        importedCount++;
+                    }
+                }
+            });
+
+            if (importedCount > 0) {
+                saveProfileData(data);
+                renderProfilePage();
+                
+                // Update Sidebar Model selection dropdown if necessary
+                if (typeof window.openModelSelectionModal === 'function') {
+                    // Just to refresh the dropdown options silently
+                    let dummySelect = document.getElementById('aiModelSelect');
+                    if(dummySelect) {
+                        let profileData = JSON.parse(localStorage.getItem('metaAINotes_profileData') || '{"apis":[]}');
+                        dummySelect.innerHTML = '';
+                        profileData.apis.forEach((api) => {
+                            const opt = document.createElement('option');
+                            opt.value = api.name;
+                            opt.text = api.name + (api.version ? ` (${api.version})` : '');
+                            dummySelect.appendChild(opt);
+                        });
+                    }
+                }
+
+                if (typeof showToast === 'function') showToast(`${importedCount} API Models imported successfully!`, 'success');
+                else alert(`${importedCount} API Models imported successfully!`);
+            } else {
+                if (typeof showToast === 'function') showToast(`No new models imported (might be duplicates or missing API Key).`, 'error');
+            }
+
+        } catch (err) {
+            console.error("JSON Import Error:", err);
+            if (typeof showToast === 'function') showToast('Error importing file! Ensure valid JSON.', 'error');
+            else alert('Error importing file! Ensure valid JSON.');
+        }
+        
+        // Reset file input so the same file can be uploaded again if needed
+        event.target.value = ''; 
+    };
+    
+    reader.readAsText(file);
+};
 // ==========================================
 // PROFILE / ACCOUNT PAGE LOGIC
 // ==========================================
@@ -10694,10 +10785,24 @@ window.closeFullScreenSearch = function(e) {
         <div class="mx-4 mt-4">
             <div class="flex items-center justify-between mb-2 px-1">
                 <span class="text-[12px] font-bold text-gray-400 uppercase tracking-widest">API Configuration</span>
-                <button onclick="openAddApiModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-lg transition-colors focus:outline-none shadow-sm">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                    Add API
-                </button>
+                
+                <!-- New Buttons Group -->
+                <div class="flex items-center gap-2">
+                    <!-- Hidden File Input for JSON -->
+                    <input type="file" id="importApiConfigInput" accept=".json" class="hidden" onchange="handleApiImport(event)">
+                    
+                    <!-- Import JSON Button -->
+                    <button onclick="triggerApiImport()" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 text-[13px] font-semibold rounded-lg transition-colors focus:outline-none shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        Import
+                    </button>
+                    
+                    <!-- Add API Button -->
+                    <button onclick="openAddApiModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-lg transition-colors focus:outline-none shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+                        Add API
+                    </button>
+                </div>
             </div>
 
             <!-- Active API indicator -->
